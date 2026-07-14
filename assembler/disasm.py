@@ -27,6 +27,8 @@ OPCODE_TABLE: dict[int, tuple[str, list[int]]] = {
     0x23: ("JIN", [1, 1]),
     0x24: ("CALL", [1]),
     0x25: ("RET", []),
+    0x28: ("INP", [1]),
+    0x29: ("SND", [1]),
 }
 
 JUMP_OPCODES = {0x21, 0x22, 0x23, 0x24}

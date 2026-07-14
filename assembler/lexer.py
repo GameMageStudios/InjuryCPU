@@ -5,6 +5,8 @@ from .opcodes import INSTRUCTIONS
 @dataclass
 class TokenLine:
     lineno: int
+    filename: str | None = None
+    col: int = 0
     label: str | None = None
     mnemonic: str | None = None
     operands: list[str] = field(default_factory=list)
@@ -29,7 +31,7 @@ def parse_number(s: str) -> int | None:
         return None
 
 
-DATA_DIRECTIVES = {".DB", ".DW"}
+DATA_DIRECTIVES = {".DB", ".DW", ".FILL"}
 
 
 def split_tokens(s: str) -> list[str]:
@@ -92,7 +94,10 @@ def split_operands(s: str) -> list[str]:
     return parts
 
 
-def tokenize(source: str) -> list[TokenLine]:
+def tokenize(
+    source: str,
+    line_origin: list[tuple[str, int] | None] | None = None,
+) -> list[TokenLine]:
     lines = source.split("\n")
     result = []
 
@@ -100,6 +105,14 @@ def tokenize(source: str) -> list[TokenLine]:
         stripped = line.strip()
         if not stripped:
             continue
+
+        # Determine file and line from origin mapping
+        origin_file: str | None = None
+        origin_line = i
+        if line_origin is not None and i - 1 < len(line_origin):
+            origin = line_origin[i - 1]
+            if origin is not None:
+                origin_file, origin_line = origin
 
         label = None
         mnemonic = None
@@ -117,8 +130,19 @@ def tokenize(source: str) -> list[TokenLine]:
                 stripped = parts[1].strip()
 
         if not stripped:
-            result.append(TokenLine(lineno=i, label=label, raw=line))
+            result.append(
+                TokenLine(
+                    lineno=origin_line,
+                    filename=origin_file,
+                    col=0,
+                    label=label,
+                    raw=line,
+                )
+            )
             continue
+
+        # Find column where the first non-whitespace token starts in the original line
+        col = len(line) - len(line.lstrip())
 
         tokens = split_tokens(stripped)
         upper = tokens[0].upper()
@@ -135,7 +159,13 @@ def tokenize(source: str) -> list[TokenLine]:
 
         result.append(
             TokenLine(
-                lineno=i, label=label, mnemonic=mnemonic, operands=operands, raw=line
+                lineno=origin_line,
+                filename=origin_file,
+                col=col,
+                label=label,
+                mnemonic=mnemonic,
+                operands=operands,
+                raw=line,
             )
         )
 

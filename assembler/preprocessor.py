@@ -2,13 +2,25 @@ import re
 import os
 
 
-def strip_comments(source: str) -> str:
+LineOrigin = tuple[str, int] | None
+
+
+def strip_comments(source: str, line_origin: list[LineOrigin]) -> str:
     result = []
     i = 0
     length = len(source)
     in_block = False
+    out_lines: list[list[str]] = [[]]
+    out_line_idx = 0
 
     while i < length:
+        if source[i] == "\n":
+            out_lines.append([])
+            out_line_idx += 1
+            result.append("\n")
+            i += 1
+            continue
+
         if in_block:
             if source[i] == "*" and i + 1 < length and source[i + 1] == "/":
                 in_block = False
@@ -27,25 +39,51 @@ def strip_comments(source: str) -> str:
             i += 2
             continue
 
+        out_lines[out_line_idx].append(source[i])
         result.append(source[i])
         i += 1
 
+    # Build new origin mapping: each output line inherits origin from its input line
+    in_lines = source.split("\n")
+    new_origin: list[LineOrigin] = []
+    in_idx = 0
+    for out_chars in out_lines:
+        out_text = "".join(out_chars)
+        # Find which input line this output line's content starts from
+        if in_idx < len(line_origin):
+            new_origin.append(line_origin[in_idx])
+        else:
+            new_origin.append(None)
+        # Advance input index for non-empty output lines
+        if out_text.strip() and in_idx < len(in_lines) - 1:
+            in_idx += 1
+        elif not out_text.strip() and in_idx < len(in_lines):
+            in_idx += 1
+
+    line_origin.clear()
+    line_origin.extend(new_origin)
     return "".join(result)
 
 
-def process_defines(source: str) -> tuple[str, dict[str, str]]:
+def process_defines(
+    source: str, line_origin: list[LineOrigin]
+) -> tuple[str, dict[str, str]]:
     defines = {}
     lines = source.split("\n")
     result = []
+    new_origin: list[LineOrigin] = []
 
-    for line in lines:
+    for line, origin in zip(lines, line_origin):
         stripped = line.strip()
         m = re.match(r"#define\s+(\S+)\s+(.*)", stripped)
         if m:
             defines[m.group(1)] = m.group(2).strip()
         else:
             result.append(line)
+            new_origin.append(origin)
 
+    line_origin.clear()
+    line_origin.extend(new_origin)
     return "\n".join(result), defines
 
 
@@ -60,14 +98,20 @@ def apply_defines(source: str, defines: dict[str, str]) -> str:
     return source
 
 
-def process_includes(source: str, base_dir: str, seen: set[str] | None = None) -> str:
+def process_includes(
+    source: str,
+    base_dir: str,
+    seen: set[str] | None = None,
+    main_filename: str | None = None,
+) -> tuple[str, list[LineOrigin]]:
     if seen is None:
         seen = set()
 
     lines = source.split("\n")
-    result = []
+    result: list[str] = []
+    line_origin: list[LineOrigin] = []
 
-    for line in lines:
+    for line_num, line in enumerate(lines, start=1):
         stripped = line.strip()
         m = re.match(r'#include\s+"(.+)"', stripped)
         if m:
@@ -80,21 +124,31 @@ def process_includes(source: str, base_dir: str, seen: set[str] | None = None) -
             with open(inc_path, "r") as f:
                 inc_source = f.read()
             inc_dir = os.path.dirname(inc_path)
-            inc_source = process_includes(inc_source, inc_dir, seen)
-            result.append(inc_source)
+            inc_text, inc_origin = process_includes(
+                inc_source, inc_dir, seen, main_filename=inc_path
+            )
+            inc_lines = inc_text.split("\n")
+            for inc_line, inc_line_origin in zip(inc_lines, inc_origin):
+                result.append(inc_line)
+                line_origin.append(inc_line_origin)
         else:
             result.append(line)
+            origin_file = main_filename if main_filename else None
+            line_origin.append((origin_file, line_num))
 
-    return "\n".join(result)
+    return "\n".join(result), line_origin
 
 
 MACRO_DEF_RE = re.compile(r"#macro\s+(\w+)\s*\(([^)]*)\)\s*\{", re.DOTALL)
 
 
-def process_macros(source: str) -> tuple[str, dict[str, tuple[list[str], str]]]:
+def process_macros(
+    source: str, line_origin: list[LineOrigin]
+) -> tuple[str, dict[str, tuple[list[str], str]]]:
     macros: dict[str, tuple[list[str], str]] = {}
     lines = source.split("\n")
     result = []
+    new_origin: list[LineOrigin] = []
     i = 0
 
     while i < len(lines):
@@ -143,29 +197,39 @@ def process_macros(source: str) -> tuple[str, dict[str, tuple[list[str], str]]]:
             macros[name] = (args, body)
         else:
             result.append(lines[i])
+            new_origin.append(line_origin[i] if i < len(line_origin) else None)
         i += 1
 
+    line_origin.clear()
+    line_origin.extend(new_origin)
     return "\n".join(result), macros
 
 
-def expand_macros(source: str, macros: dict[str, tuple[list[str], str]]) -> str:
+def expand_macros(
+    source: str, macros: dict[str, tuple[list[str], str]], line_origin: list[LineOrigin]
+) -> str:
     if not macros:
         return source
 
     for _ in range(100):
-        new_source = _expand_macros_once(source, macros)
+        new_source, new_origin = _expand_macros_once(source, macros, line_origin)
         if new_source == source:
             break
         source = new_source
+        line_origin.clear()
+        line_origin.extend(new_origin)
 
     return source
 
 
-def _expand_macros_once(source: str, macros: dict[str, tuple[list[str], str]]) -> str:
+def _expand_macros_once(
+    source: str, macros: dict[str, tuple[list[str], str]], line_origin: list[LineOrigin]
+) -> tuple[str, list[LineOrigin]]:
     lines = source.split("\n")
     result = []
+    new_origin: list[LineOrigin] = []
 
-    for line in lines:
+    for line_idx, line in enumerate(lines):
         stripped = line.strip()
         expanded = False
 
@@ -192,24 +256,33 @@ def _expand_macros_once(source: str, macros: dict[str, tuple[list[str], str]]) -
                         expanded_body,
                     )
 
+                origin_entry = (
+                    line_origin[line_idx] if line_idx < len(line_origin) else None
+                )
                 for exp_line in expanded_body.split("\n"):
                     exp_stripped = exp_line.strip()
                     if exp_stripped:
                         result.append(exp_stripped)
+                        new_origin.append(origin_entry)
                 expanded = True
                 break
 
         if not expanded:
             result.append(line)
+            new_origin.append(
+                line_origin[line_idx] if line_idx < len(line_origin) else None
+            )
 
-    return "\n".join(result)
+    return "\n".join(result), new_origin
 
 
-def preprocess(source: str, base_dir: str = ".") -> tuple[str, dict[str, str]]:
-    source = process_includes(source, base_dir)
-    source = strip_comments(source)
-    source, macros = process_macros(source)
-    source = expand_macros(source, macros)
-    source, defines = process_defines(source)
+def preprocess(
+    source: str, base_dir: str = ".", filename: str | None = None
+) -> tuple[str, dict[str, str], list[LineOrigin]]:
+    source, line_origin = process_includes(source, base_dir, main_filename=filename)
+    source = strip_comments(source, line_origin)
+    source, macros = process_macros(source, line_origin)
+    source = expand_macros(source, macros, line_origin)
+    source, defines = process_defines(source, line_origin)
     source = apply_defines(source, defines)
-    return source, defines
+    return source, defines, line_origin

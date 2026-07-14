@@ -26,6 +26,8 @@ INSTRUCTIONS = {
     "JIN": {"opcode": 0x23, "op_sizes": [1, 1]},
     "CALL": {"opcode": 0x24, "op_sizes": [1]},  # Q-addr, 2-byte instruction
     "RET": {"opcode": 0x25, "op_sizes": []},  # 1-byte instruction
+    "INP": {"opcode": 0x28, "op_sizes": [1]},
+    "SND": {"opcode": 0x29, "op_sizes": [1]},
 }
 
 

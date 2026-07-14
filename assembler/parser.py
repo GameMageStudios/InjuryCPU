@@ -1,15 +1,7 @@
 from .opcodes import INSTRUCTIONS, instr_size
 from .lexer import TokenLine, tokenize, DATA_DIRECTIVES
 from .expr import evaluate, ExprError, parse_number as _parse_number
-
-
-class AssemblyError(Exception):
-    def __init__(self, msg: str, lineno: int | None = None):
-        self.lineno = lineno
-        if lineno is not None:
-            super().__init__(f"Line {lineno}: {msg}")
-        else:
-            super().__init__(msg)
+from .errors import AssemblyError
 
 
 def is_local_label(name: str) -> bool:
@@ -29,13 +21,18 @@ def _make_lookup(symbols: dict[str, int], scope: str | None):
 
 
 def resolve_operand(
-    operand: str, symbols: dict[str, int], scope: str | None, lineno: int
+    operand: str,
+    symbols: dict[str, int],
+    scope: str | None,
+    lineno: int,
+    filename: str | None = None,
+    col: int = 0,
 ) -> int:
     lookup = _make_lookup(symbols, scope)
     try:
         return evaluate(operand, lookup)
     except ExprError as e:
-        raise AssemblyError(str(e), lineno)
+        raise AssemblyError(str(e), filename, lineno, col)
 
 
 def parse_operand_value(s: str) -> int | None:
@@ -88,6 +85,14 @@ def data_size(mnemonic: str, operands: list[str]) -> int:
     upper = mnemonic.upper()
     if upper == ".DW":
         return len(operands) * 2
+    if upper == ".FILL":
+        if operands:
+            lookup = lambda name: None
+            try:
+                return evaluate(operands[0], lookup)
+            except ExprError:
+                return 0
+        return 0
     count = 0
     for op in operands:
         string = parse_string_operand(op)
@@ -104,15 +109,43 @@ def assemble_data(
     upper = tok.mnemonic.upper()
     code = []
     lookup = _make_lookup(symbols, scope)
+    if upper == ".FILL":
+        if tok.operands:
+            try:
+                count = evaluate(tok.operands[0], lookup)
+            except ExprError:
+                raise AssemblyError(
+                    f"Invalid count '{tok.operands[0]}' for .fill",
+                    tok.filename,
+                    tok.lineno,
+                    tok.col,
+                )
+            if count < 0:
+                raise AssemblyError(
+                    f"Negative count for .fill",
+                    tok.filename,
+                    tok.lineno,
+                    tok.col,
+                )
+            return [0] * count
+        return []
     for op in tok.operands:
         if upper == ".DW":
             try:
                 val = evaluate(op, lookup)
             except ExprError:
-                raise AssemblyError(f"Invalid value '{op}' for .dw", tok.lineno)
+                raise AssemblyError(
+                    f"Invalid value '{op}' for .dw",
+                    tok.filename,
+                    tok.lineno,
+                    tok.col,
+                )
             if val < 0 or val > 0xFFFF:
                 raise AssemblyError(
-                    f"Value {val} out of range for 16-bit word", tok.lineno
+                    f"Value {val} out of range for 16-bit word",
+                    tok.filename,
+                    tok.lineno,
+                    tok.col,
                 )
             code.append((val >> 8) & 0xFF)
             code.append(val & 0xFF)
@@ -124,10 +157,18 @@ def assemble_data(
                 try:
                     val = evaluate(op, lookup)
                 except ExprError:
-                    raise AssemblyError(f"Invalid value '{op}' for .db", tok.lineno)
+                    raise AssemblyError(
+                        f"Invalid value '{op}' for .db",
+                        tok.filename,
+                        tok.lineno,
+                        tok.col,
+                    )
                 if val < 0 or val > 0xFF:
                     raise AssemblyError(
-                        f"Value {val} out of range for 8-bit byte", tok.lineno
+                        f"Value {val} out of range for 8-bit byte",
+                        tok.filename,
+                        tok.lineno,
+                        tok.col,
                     )
                 code.append(val & 0xFF)
     return code
@@ -154,16 +195,28 @@ def assemble_lines(
                 if scope is None:
                     raise AssemblyError(
                         f"Local label '{tok.label}' defined before any main label",
+                        tok.filename,
                         tok.lineno,
+                        tok.col,
                     )
                 full = scope + tok.label
                 if full in symbols:
-                    raise AssemblyError(f"Duplicate symbol '{full}'", tok.lineno)
+                    raise AssemblyError(
+                        f"Duplicate symbol '{full}'",
+                        tok.filename,
+                        tok.lineno,
+                        tok.col,
+                    )
                 symbols[full] = addr
             else:
                 scope = tok.label
                 if tok.label in symbols:
-                    raise AssemblyError(f"Duplicate symbol '{tok.label}'", tok.lineno)
+                    raise AssemblyError(
+                        f"Duplicate symbol '{tok.label}'",
+                        tok.filename,
+                        tok.lineno,
+                        tok.col,
+                    )
                 symbols[tok.label] = addr
 
         if tok.mnemonic:
@@ -177,7 +230,9 @@ def assemble_lines(
                 if len(tok.operands) != expected:
                     raise AssemblyError(
                         f"{tok.mnemonic} expects {expected} operands, got {len(tok.operands)}",
+                        tok.filename,
                         tok.lineno,
+                        tok.col,
                     )
                 instructions.append((tok, addr, scope))
                 if is_jump_to_label(tok) and jmpaddr_val is not None:
@@ -185,12 +240,19 @@ def assemble_lines(
                 elif is_jump_to_label(tok) and jmpaddr_val is None:
                     raise AssemblyError(
                         f"JMP/JIF/JIN/CALL with label operand requires #define JMPADDR <qm_slot>",
+                        tok.filename,
                         tok.lineno,
+                        tok.col,
                     )
                 else:
                     addr += instr_size(tok.mnemonic)
             else:
-                raise AssemblyError(f"Unknown instruction '{tok.mnemonic}'", tok.lineno)
+                raise AssemblyError(
+                    f"Unknown instruction '{tok.mnemonic}'",
+                    tok.filename,
+                    tok.lineno,
+                    tok.col,
+                )
 
     output: list[tuple[int, list[int]]] = []
     for tok, instr_addr, instr_scope in instructions:
@@ -200,7 +262,12 @@ def assemble_lines(
             output.append((instr_addr, code))
         elif is_jump_to_label(tok) and jmpaddr_val is not None:
             label_val = resolve_operand(
-                tok.operands[0], symbols, instr_scope, tok.lineno
+                tok.operands[0],
+                symbols,
+                instr_scope,
+                tok.lineno,
+                tok.filename,
+                tok.col,
             )
             ldi_info = INSTRUCTIONS["LDI"]
             jmp_info = INSTRUCTIONS[tok.mnemonic]
@@ -215,7 +282,14 @@ def assemble_lines(
             jmp_code.append(jmpaddr_val & 0xFF)
             if len(tok.operands) > 1:
                 for op, op_size in zip(tok.operands[1:], jmp_info["op_sizes"][1:]):
-                    val = resolve_operand(op, symbols, instr_scope, tok.lineno)
+                    val = resolve_operand(
+                        op,
+                        symbols,
+                        instr_scope,
+                        tok.lineno,
+                        tok.filename,
+                        tok.col,
+                    )
                     for b in range(op_size - 1, -1, -1):
                         jmp_code.append((val >> (b * 8)) & 0xFF)
             output.append((instr_addr + instr_size("LDI"), jmp_code))
@@ -223,7 +297,14 @@ def assemble_lines(
             info = INSTRUCTIONS[tok.mnemonic]
             code = [info["opcode"]]
             for op, op_size in zip(tok.operands, info["op_sizes"]):
-                val = resolve_operand(op, symbols, instr_scope, tok.lineno)
+                val = resolve_operand(
+                    op,
+                    symbols,
+                    instr_scope,
+                    tok.lineno,
+                    tok.filename,
+                    tok.col,
+                )
                 max_val = (1 << (op_size * 8)) - 1
                 val = val & max_val
                 for b in range(op_size - 1, -1, -1):

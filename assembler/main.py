@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from assembler import assemble_file, assemble_list_file
 from assembler.output import to_hex_dump, to_hex_string
-from assembler.parser import AssemblyError
+from assembler.errors import AssemblyError
 
 
 def main():
