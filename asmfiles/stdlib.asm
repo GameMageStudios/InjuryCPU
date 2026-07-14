@@ -9,7 +9,7 @@
     0xFF          - JMPADDR
 */
 
-#define STDLIB_VER 1
+#define STDLIB_VER 2
 #define STDLIB_SUBVER 0
 
 #define VIDEO_MEMORY_START 0xF060
@@ -94,6 +94,12 @@ __halt:
         NONE        
 */
 
+
+#macro c_STDLIB_PUTS(position) {
+    LDI 0xA0, position
+    CALL stdlib_puts
+}
+
 stdlib_jump_cursor:
     MOV 0xA0, VIDEO_CARET
     RET
@@ -106,6 +112,12 @@ stdlib_jump_cursor:
     Return
         NONE
 */
+
+#macro c_STDLIB_PUTC(char, style) {
+    LDI 0xA0, char
+    LDI 0xA1, style
+    CALL stdlib_puts
+}
 
 stdlib_putc:
     LDI 0x00, '\n'
@@ -146,6 +158,12 @@ stdlib_putc:
         NONE
 */
 
+#macro c_STDLIB_PUTS(string_pointer, style) {
+    LDI 0xA0, string_pointer
+    LDI 0xA1, style
+    CALL stdlib_puts
+}
+
 stdlib_puts:
     MOV 0xA0, 0x08 ; Copy over the string pointer
 .loop:
@@ -172,6 +190,11 @@ stdlib_puts:
     Return
         NONE
 */
+
+#macro c_STDLIB_CLEAR() {
+    CALL stdlib_clear
+}
+
 stdlib_clear:
     LDI 0x08, 0 ; Counter
 .loop:
@@ -186,4 +209,25 @@ stdlib_clear:
     JMP .loop
 .end:
     LDI VIDEO_CARET, VIDEO_MEMORY_START
+    RET
+
+/*
+    stdlib_play_tone
+    Args
+        0xA0 - Tone, max 255
+        0xA1 - Duration (x0.01 seconds), max 255
+*/
+
+#macro c_STDLIB_PLAY_TONE(tone, duration) {
+    LDI 0xA0, tone
+    LDI 0xA1, duration
+    CALL stdlib_play_tone
+}
+
+stdlib_play_tone:
+    MOV 0xA1, 0x00
+    MULi 0x00, 256, 0x00
+    ADD 0x00, 0xA0, 0x00
+    SND 0x00
+
     RET
