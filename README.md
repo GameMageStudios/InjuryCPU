@@ -1,6 +1,6 @@
 # Injury CPU
 
-Also visit (Website)[https://gamemagestudios.github.io/InjuryCPU/]
+Also visit [Website](https://gamemagestudios.github.io/InjuryCPU/)
 
 ## About
 
