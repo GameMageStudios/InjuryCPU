@@ -33,10 +33,10 @@ Opcode (Dec) | Opcode (Hex) | Name | Alias  | Arg1       | Arg2       | Arg3    
 34|`22`|Jump If|`JIF`|`Q-addr-pc`|`Q-addr-cond`|-|Jumps to the pc in `Q-addr-pc`, only if `Q-addr-cond` is not `0x0000`
 35|`23`|Jump If Not|`JIN`|`Q-addr-pc`|`Q-addr-cond`|-|Jumps to the pc in `Q-addr-pc`, only if `Q-addr-cond` is `0x0000`
 36|`24`|Call|`CALL`|`Q-addr`|-|-|Jumps to the pc in `Q-addr`, and stores the return address to be returned to with `RET`, call stack size is basicaly unlimited, because it is another simulated memory unit
-36|`24`|Return|`RET`|-|-|-|Pops the most top element of the call stack, and jump to the address in it
+37|`25`|Return|`RET`|-|-|-|Pops the most top element of the call stack, and jump to the address in it
 38 ... 39|`26` - `27`|-|-|-|-|-|-
 40|`28`|Collect Input|`INP`|`Q-addr`|-|-|Collects the buffered ASCII input of the simulation, stores in `Q-addr`
-41|`28`|Sound|`SND`|`Q-addr`|-|-|Plays a midi note where the high byte of the value in `Q-addr` is the duration in one-hundredths of a second (100 = 1 second), and the low byte is the note from `0` - `255`
+41|`29`|Sound|`SND`|`Q-addr`|-|-|Plays a midi note where the high byte of the value in `Q-addr` is the duration in one-hundredths of a second (100 = 1 second), and the low byte is the note from `0` - `255`
 
 In the usage of `JMP`, `JIF`, `JIN`, `CALL`, the first argument can be replaced with a label, and gets replaced with (in the usage of `JMP`)
 ```injury
