@@ -1,5 +1,7 @@
 # Injury CPU
 
+Also visit (Website)[https://gamemagestudios.github.io/InjuryCPU/]
+
 ## About
 
 Injury CPU is a project made mostly in the Scratch and Python programing languages.
