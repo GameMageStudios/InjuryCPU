@@ -8,10 +8,10 @@ Opcode (Dec) | Opcode (Hex) | Name | Alias  | Arg1       | Arg2       | Arg3    
 ------------ | ------------ | ---- | ------ | ---------- | ---------- | ---------- | -----------
 0|`00`|No Operation|`NOP`|-|-|-|No-Operation
 1|`01`|Load Imidiate|`LDI`|`Q-addr`|`Value`|-|Loads a constant value into quick memory
-2|`02`|Load|`LD`|`Q-addr`|`RAM-addr`|-|Loads a value from RAM into quick memory
-3|`03`|Load from Pointer|`LDP`|`Q-addr-str`|`Q-addr-pnt`|-|Loads a value like `LD`, but instead of using an imidiate address, uses a "pointer", from `Q-addr-pnt`
-4|`04`|Store|`ST`|`Q-addr`|`RAM-addr`|-|Stores a value (from `Q-addr`) into RAM
-5|`05`|Store at Pointer|`STP`|`Q-addr-str`|`Q-addr-pnt`|-|Stores a value like `ST`, but instead of using an imidiate address, uses a "pointer", from `Q-addr-pnt`
+2|`02`|Load|`LD`|`Q-addr`|`RAM-addr`|-|Loads a value from RAM into quick memory, LOADS A SINGLE BYTE
+3|`03`|Load from Pointer|`LDP`|`Q-addr-str`|`Q-addr-pnt`|-|Loads a value like `LD`, but instead of using an imidiate address, uses a "pointer", from `Q-addr-pnt`, LOADS A SINGLE BYTE
+4|`04`|Store|`ST`|`Q-addr`|`RAM-addr`|-|Stores a value (from `Q-addr`) into RAM, STORES A SINGLE BYTE
+5|`05`|Store at Pointer|`STP`|`Q-addr-str`|`Q-addr-pnt`|-|Stores a value like `ST`, but instead of using an imidiate address, uses a "pointer", from `Q-addr-pnt`, STORES A SINGLE BYTE
 6|`06`|Move|`MOV`|`Q-addr-src`|`Q-addr-str`|-|Copies a value from `Q-addr-src` to `Q-addr-str`
 7|`07`|-|-|-|-|-|-
 8|`08`|Add|`ADD`|`Q-addr-a`|`Q-addr-b`|`Q-addr-str`|Adds values from `Q-addr-a` and `Q-addr-b` and stores the result into `Q-addr-str`
