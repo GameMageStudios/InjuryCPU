@@ -153,3 +153,4 @@ Current official versions:
 `VER` | `SUBVER` | Description of change
 ----- | -------- | ----------------------------------
 1     | 0        | The first implementation.
+2     | 0        | Added the `stdlib_play_tone` function, as well as `c_STDLIB_*` macros for every function, enabeling quicker function calling with static parameters.
